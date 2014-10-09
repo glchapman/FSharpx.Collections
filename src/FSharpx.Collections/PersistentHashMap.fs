@@ -523,7 +523,7 @@ and private BitmapIndexedNode(thread,bitmap',array':obj[]) =
                     else
                         this :> INode
 
-type internal TransientHashMap<[<EqualityConditionalOn>]'T, 'S when 'T : equality and 'S : equality> (thread,count',root':INode,hasNull',nullValue':'S) =
+type internal TransientHashMap<[<EqualityConditionalOn>]'T, 'S when 'T : equality> (thread,count',root':INode,hasNull',nullValue':obj) =
     let leafFlag = Box(null)
 
     member val hasNull = hasNull' with get, set
@@ -531,7 +531,7 @@ type internal TransientHashMap<[<EqualityConditionalOn>]'T, 'S when 'T : equalit
     member val count = count' with get, set
     member val root = root' with get, set
     
-    static member Empty() : TransientHashMap<'T, 'S> = TransientHashMap(ref Thread.CurrentThread,0, Unchecked.defaultof<INode>, false, Unchecked.defaultof<'S>)
+    static member Empty() : TransientHashMap<'T, 'S> = TransientHashMap(ref Thread.CurrentThread,0, Unchecked.defaultof<INode>, false, null)
     member this.Length : int = this.count
 
     member internal this.EnsureEditable() =
@@ -547,8 +547,7 @@ type internal TransientHashMap<[<EqualityConditionalOn>]'T, 'S when 'T : equalit
 
     member this.Add(key:'T, value:'S) =
         if key = Unchecked.defaultof<'T> then
-            if this.nullValue <> value then 
-                this.nullValue <- value
+            this.nullValue <- box value
             if not this.hasNull then
                 this.count <- this.count + 1;
                 this.hasNull <- true
@@ -570,7 +569,7 @@ type internal TransientHashMap<[<EqualityConditionalOn>]'T, 'S when 'T : equalit
         if key = Unchecked.defaultof<'T> then
             if not this.hasNull then this else
             this.hasNull <- false
-            this.nullValue <- Unchecked.defaultof<'S>
+            this.nullValue <- null
             this.count <- this.count - 1
             this
         else
@@ -585,7 +584,7 @@ type internal TransientHashMap<[<EqualityConditionalOn>]'T, 'S when 'T : equalit
     member this.Item 
         with get key = 
             if key = Unchecked.defaultof<'T> then 
-                if this.hasNull then this.nullValue else failwith "Key null is not found in the map."
+                if this.hasNull then unbox this.nullValue else failwith "Key null is not found in the map."
             else
                 if this.root = Unchecked.defaultof<INode> then
                     failwithf "Key %A is not found in the map." key 
@@ -600,16 +599,16 @@ type internal TransientHashMap<[<EqualityConditionalOn>]'T, 'S when 'T : equalit
 
 /// A Map is a collection that maps keys to values. Hash maps require keys that correctly support GetHashCode and Equals.
 /// Hash maps provide fast access (log32N hops). count is O(1).
-and PersistentHashMap<[<EqualityConditionalOn>]'T, 'S when 'T : equality and 'S : equality>  =
+and PersistentHashMap<[<EqualityConditionalOn>]'T, 'S when 'T : equality>  =
    val private count: int
    val private root:INode
    val private hasNull:bool
-   val private nullValue:'S
+   val private nullValue:obj
 
-    static member Empty() : PersistentHashMap<'T, 'S> = PersistentHashMap(0, Unchecked.defaultof<INode>, false, Unchecked.defaultof<'S>)
+    static member Empty() : PersistentHashMap<'T, 'S> = PersistentHashMap(0, Unchecked.defaultof<INode>, false, null)
     member this.Length : int = this.count
 
-    internal new (count',root':INode,hasNull', nullValue':'S) = {
+    internal new (count',root':INode,hasNull', nullValue':obj) = {
         count = count'
         root = root'
         hasNull = hasNull'
@@ -632,9 +631,11 @@ and PersistentHashMap<[<EqualityConditionalOn>]'T, 'S when 'T : equality and 'S 
 
     member this.Add(key:'T, value:'S) =
         if key = Unchecked.defaultof<'T> then
-            if this.hasNull && value = this.nullValue then this else
-            let count = if this.hasNull then this.count else this.count + 1
-            PersistentHashMap<'T, 'S>(count, this.root, true, value)
+            let valueobj = box value
+            if this.hasNull && valueobj = this.nullValue then this 
+            else
+                let count = if this.hasNull then this.count else this.count + 1
+                PersistentHashMap<'T, 'S>(count, this.root, true, valueobj)
         else 
             let addedLeaf = Box(null)
             let newroot =
@@ -657,7 +658,7 @@ and PersistentHashMap<[<EqualityConditionalOn>]'T, 'S when 'T : equality and 'S 
     member this.Item 
         with get key = 
             if key = Unchecked.defaultof<'T> then 
-                if this.hasNull then this.nullValue else failwith "Key null is not found in the map."
+                if this.hasNull then unbox this.nullValue else failwith "Key null is not found in the map."
             else
                 if this.root = Unchecked.defaultof<INode> then
                     failwithf "Key %A is not found in the map." key 
@@ -668,7 +669,7 @@ and PersistentHashMap<[<EqualityConditionalOn>]'T, 'S when 'T : equality and 'S 
 
     member this.Iterator<'T,'S>() : ('T * 'S) seq =
         seq {            
-            if this.hasNull then yield Unchecked.defaultof<'T>, this.nullValue
+            if this.hasNull then yield Unchecked.defaultof<'T>, unbox this.nullValue
             if this.root <> Unchecked.defaultof<INode> then
                 yield!
                     this.root.nodeSeq()
