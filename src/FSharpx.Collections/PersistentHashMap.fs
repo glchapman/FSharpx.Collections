@@ -632,7 +632,7 @@ and PersistentHashMap<[<EqualityConditionalOn>]'T, 'S when 'T : equality>  =
     member this.Add(key:'T, value:'S) =
         if key = Unchecked.defaultof<'T> then
             let valueobj = box value
-            if this.hasNull && valueobj = this.nullValue then this 
+            if this.hasNull && System.Object.ReferenceEquals(valueobj, this.nullValue) then this 
             else
                 let count = if this.hasNull then this.count else this.count + 1
                 PersistentHashMap<'T, 'S>(count, this.root, true, valueobj)
