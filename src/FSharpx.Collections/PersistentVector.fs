@@ -146,10 +146,7 @@ and PersistentVector<'T> (count,shift:int,root:Node,tail:obj[])  =
     static member Empty() : PersistentVector<'T> = PersistentVector<'T>(0,Literals.blockSizeShift,Node(),[||])
 
     static member ofSeq(items:'T seq) =
-        let mutable ret = TransientVector()
-        for item in items do
-            ret <- ret.conj item
-        ret.persistent()
+        PersistentVector.Empty().AddRange(items)
 
     override this.GetHashCode() =
         match !hashCode with
@@ -233,6 +230,24 @@ and PersistentVector<'T> (count,shift:int,root:Node,tail:obj[])  =
         let ret = new Node(root.Thread, Array.copy node.Array)
         ret.Array.[subidx] <- null
         ret
+
+    member internal this.WithTransient(f: TransientVector<'T> -> TransientVector<'T>) =
+        let editableRoot = Node(ref Thread.CurrentThread, Array.copy root.Array)
+        let editableTail =
+            let ret = Array.zeroCreate Literals.blockSize
+            Array.blit tail 0 ret 0 tail.Length
+            ret
+        let tv = TransientVector(count, shift, editableRoot, editableTail)
+        let tv = f tv
+        tv.persistent()
+
+    member this.AddRange(items: seq<'T>) =
+        this.WithTransient(fun tv -> 
+            let mutable ret = tv
+            for item in items do
+                ret <- ret.conj item
+            ret
+        )
 
     member this.rangedIterator<'T>(startIndex,endIndex) : 'T seq =
         let i = ref startIndex
@@ -319,13 +334,7 @@ and PersistentVector<'T> (count,shift:int,root:Node,tail:obj[])  =
                     yield (!array).[!i &&& Literals.blockIndexMask] :?> 'T
                     i := !i - 1 
                 }
-
-            let mutable ret = TransientVector()
-
-            for item in items do
-                ret <- ret.conj item
-
-            ret.persistent()
+            PersistentVector.ofSeq items
 
     member this.Unconj = if count > 0 then this.Initial, this.[count - 1] else failwith "Can't peek empty vector"
 
@@ -361,12 +370,7 @@ module PersistentVector =
     let (|Conj|Nil|) (v : PersistentVector<'T>) = match v.TryUnconj with Some(a,b) -> Conj(a,b) | None -> Nil
      
     let append (vectorA : PersistentVector<'T>) (vectorB : PersistentVector<'T>) = 
-        let mutable ret = TransientVector()
-        for i in 0..(vectorA.Length - 1) do
-            ret <- ret.conj vectorA.[i]
-        for i in 0..(vectorB.Length - 1) do
-            ret <- ret.conj vectorB.[i]
-        ret.persistent() 
+        vectorA.AddRange(vectorB)
 
     let inline conj (x : 'T) (vector : PersistentVector<'T>) = vector.Conj x
 
@@ -390,10 +394,7 @@ module PersistentVector =
         loop state v (v.Length - 1)
 
     let init count (f: int -> 'T) : PersistentVector<'T> =
-        let mutable ret = TransientVector()
-        for i in 0..(count-1) do
-            ret <- ret.conj(f i)
-        ret.persistent() 
+        PersistentVector.ofSeq (Seq.init count f)
 
     let inline initial (vector: PersistentVector<'T>) = vector.Initial
 
@@ -408,10 +409,7 @@ module PersistentVector =
     let inline length (vector: PersistentVector<'T>) : int = vector.Length
 
     let map (f : 'T -> 'T1) (vector: PersistentVector<'T>) : 'T1 PersistentVector = 
-        let mutable ret = TransientVector()
-        for item in vector do
-            ret <- ret.conj(f item)
-        ret.persistent() 
+        PersistentVector.ofSeq (Seq.map f vector)
 
     let inline nth i (vector: PersistentVector<'T>) : 'T = vector.[i]
 

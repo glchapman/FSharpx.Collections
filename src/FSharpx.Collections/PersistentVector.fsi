@@ -46,6 +46,9 @@ type PersistentVector<'T> =
     /// O(1). Returns option tuple last element and vector without last item  
     member TryUnconj : (PersistentVector<'T> * 'T) option
 
+    /// O(n) where n is count of items
+    member AddRange : seq<'T> -> PersistentVector<'T>
+
     /// O(log32n). Returns a new vector that contains the given value at the index.
     member Update : int * 'T -> PersistentVector<'T> 
             

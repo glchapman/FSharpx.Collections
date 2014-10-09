@@ -625,10 +625,20 @@ and PersistentHashMap<[<EqualityConditionalOn>]'T, 'S when 'T : equality and 'S 
                 this.root.find(0, hash(key), key) <> null
 
     static member ofSeq(items:('T*'S) seq) =
-        let mutable ret = TransientHashMap<'T,'S>.Empty()
-        for (key,value) in items do
-            ret <- ret.Add(key,value)
-        ret.persistent()
+        PersistentHashMap.Empty().AddRange(items)
+
+    member internal this.WithTransient(f : TransientHashMap<'T,'S> -> TransientHashMap<'T,'S>) =
+        let tm = TransientHashMap(ref Thread.CurrentThread, this.count, this.root, this.hasNull, this.nullValue)
+        let tm = f tm
+        tm.persistent()
+
+    member this.AddRange(items: seq<'T * 'S>) =
+        this.WithTransient(fun tm ->
+            let mutable ret = tm
+            for key, value in items do
+                ret <- ret.Add(key, value)
+            ret
+        )
 
     member this.Add(key:'T, value:'S) =
         if key = Unchecked.defaultof<'T> then
@@ -713,7 +723,4 @@ module PersistentHashMap =
 
     ///O(n). Returns a HashMap whose elements are the results of applying the supplied function to each of the elements of a supplied HashMap.
     let map (f : 'S -> 'S1) (map: PersistentHashMap<'T, 'S>) : PersistentHashMap<'T, 'S1> = 
-        let mutable ret = TransientHashMap<'T, 'S1>.Empty()
-        for (key,value) in map do
-            ret <- ret.Add(key,f value)
-        ret.persistent() 
+        PersistentHashMap.ofSeq (Seq.map (fun (k,v) -> (k, f v)) map)
