@@ -18,13 +18,13 @@ type internal INode =
     abstract member nodeSeq : unit -> (obj*obj) seq
 
 module private BitCount =
-    let bitCounts = 
+    let bitCounts =
         let bitCounts = Array.create 65536 0
         let position1 = ref -1
         let position2 = ref -1
 
         for i in 1 .. 65535 do
-           if !position1 = !position2 then       
+           if !position1 = !position2 then
                 position1 := 0
                 position2 := i
 
@@ -63,12 +63,12 @@ module private NodeHelpers =
         newArray
 
 
-    let inline createNodeSeq(array: obj[]) = 
+    let inline createNodeSeq(array: obj[]) =
         seq {
             let j = ref 0
-            while !j < array.Length do                
+            while !j < array.Length do
                 let isNode = array.[!j+1] :? INode
-                
+
                 if isNode then
                     let node = array.[!j+1] :?> INode
                     if node <> Unchecked.defaultof<INode> then
@@ -76,9 +76,9 @@ module private NodeHelpers =
                 else
                     if array.[!j] <> null then
                         yield array.[!j],array.[!j+1]
-            
+
                 j := !j + 2 }
-             
+
 open BitCount
 open NodeHelpers
 
@@ -87,8 +87,8 @@ type private NodeCreation =
     static member createNode(thread, shift, key1, val1, key2hash, key2, val2) =
         let key1hash = hash(key1)
 
-        if key1hash = key2hash then HashCollisionNode(ref null, key1hash, 2, [|key1; val1; key2; val2|]) :> INode else 
-        
+        if key1hash = key2hash then HashCollisionNode(ref null, key1hash, 2, [|key1; val1; key2; val2|]) :> INode else
+
         let addedLeaf = Box(null)
         (BitmapIndexedNode() :> INode)
             .assoc(thread, shift, key1hash, key1, val1, addedLeaf)
@@ -97,19 +97,19 @@ type private NodeCreation =
     static member createNode(shift, key1, val1, key2hash, key2, val2) =
         let key1hash = hash(key1)
 
-        if key1hash = key2hash then HashCollisionNode(ref null, key1hash, 2, [|key1; val1; key2; val2|]) :> INode else 
-        
+        if key1hash = key2hash then HashCollisionNode(ref null, key1hash, 2, [|key1; val1; key2; val2|]) :> INode else
+
         let addedLeaf = Box(null)
         (BitmapIndexedNode() :> INode)
             .assoc(shift, key1hash, key1, val1, addedLeaf)
             .assoc(shift, key2hash, key2, val2, addedLeaf)
-       
+
 
 and private HashCollisionNode(thread,hashCollisionKey,count',array':obj[]) =
     let thread = thread
     member val array = array' with get, set
     member val count = count' with get, set
-        
+
     with
         member this.findIndex key =
             let i = ref 0
@@ -131,10 +131,10 @@ and private HashCollisionNode(thread,hashCollisionKey,count',array':obj[]) =
             HashCollisionNode(thread1, hashCollisionKey, this.count, newArray)
 
         member this.editAndSet(thread1, i, a) =
-            let editable = this.ensureEditable(thread1) 
+            let editable = this.ensureEditable(thread1)
             editable.array.[i] <- a
             editable
-        
+
 
         member this.editAndSet(thread1, i, a, j,  b) =
             let editable = this.ensureEditable(thread1)
@@ -144,7 +144,7 @@ and private HashCollisionNode(thread,hashCollisionKey,count',array':obj[]) =
 
         interface INode with
 
-            member this.assoc(shift, hashKey, key, value, addedLeaf) : INode = 
+            member this.assoc(shift, hashKey, key, value, addedLeaf) : INode =
                 if hashKey = hashCollisionKey then
                     let idx = this.findIndex(key)
                     if idx <> -1 then
@@ -161,7 +161,7 @@ and private HashCollisionNode(thread,hashCollisionKey,count',array':obj[]) =
                     (BitmapIndexedNode(ref null, bitpos(hashCollisionKey, shift), [| null; this |]) :> INode)
                         .assoc(shift, hashKey, key, value, addedLeaf)
 
-            member this.assoc(thread1, shift, hashKey, key, value, addedLeaf) : INode = 
+            member this.assoc(thread1, shift, hashKey, key, value, addedLeaf) : INode =
                 if hashCollisionKey = hashKey then
                     let idx = this.findIndex(key)
                     if idx <> -1 then
@@ -218,7 +218,7 @@ and private HashCollisionNode(thread,hashCollisionKey,count',array':obj[]) =
 and private ArrayNode(thread,count',array':INode[]) =
     member val array = array' with get, set
     member val count = count' with get, set
-                    
+
     with
 
         member this.pack(thred, idx) =
@@ -230,7 +230,7 @@ and private ArrayNode(thread,count',array':INode[]) =
                     newArray.[j] <- this.array.[i] :> obj
                     bitmap <- bitmap ||| (1 <<< i)
                     j <- j + 2
-            
+
             for i in idx + 1 .. this.array.Length - 1 do
                 if this.array.[i] <> Unchecked.defaultof<INode> then
                     newArray.[j] <- this.array.[i] :> obj
@@ -241,7 +241,7 @@ and private ArrayNode(thread,count',array':INode[]) =
 
         member this.ensureEditable(thread1) =
             if !thread = !thread then this else
-            ArrayNode(thread1, this.count, Array.copy this.array) 
+            ArrayNode(thread1, this.count, Array.copy this.array)
 
 
         member this.editAndSet(thread1, i, n) =
@@ -251,7 +251,7 @@ and private ArrayNode(thread,count',array':INode[]) =
 
         interface INode with
 
-            member this.assoc(shift, hashKey, key, value, addedLeaf) : INode = 
+            member this.assoc(shift, hashKey, key, value, addedLeaf) : INode =
                 let idx = mask(hashKey, shift)
                 let node = this.array.[idx]
                 if node = Unchecked.defaultof<INode> then
@@ -261,13 +261,13 @@ and private ArrayNode(thread,count',array':INode[]) =
                     if n = node then this :> INode else
                     ArrayNode(ref null, this.count, cloneAndSetNodes(this.array, idx, n)) :> INode
 
-            member this.assoc(thread1, shift, hashKey, key, value, addedLeaf) : INode = 
+            member this.assoc(thread1, shift, hashKey, key, value, addedLeaf) : INode =
                 let idx = mask(hashKey, shift)
                 let node = this.array.[idx]
                 if node = Unchecked.defaultof<INode> then
                     let editable = this.editAndSet(thread1, idx, (BitmapIndexedNode() :> INode).assoc(thread1, shift + 5, hashKey, key, value, addedLeaf))
                     editable.count <- editable.count + 1
-                    editable :> INode                      
+                    editable :> INode
                 else
                     let n = node.assoc(thread1, shift + 5, hashKey, key, value, addedLeaf);
                     if n = node then this :> INode else this.editAndSet(thread1, idx, n) :> INode
@@ -290,7 +290,7 @@ and private ArrayNode(thread,count',array':INode[]) =
                 if node = Unchecked.defaultof<INode> then this :> INode else
                 let n = node.without(shift + 5, hashKey, key)
                 if n = node then this :> INode else
-                if n = Unchecked.defaultof<INode> then 
+                if n = Unchecked.defaultof<INode> then
                     if this.count <= 8 then // shrink
                         this.pack(ref null, idx) :> INode
                     else
@@ -304,7 +304,7 @@ and private ArrayNode(thread,count',array':INode[]) =
                 if node = Unchecked.defaultof<INode> then this :> INode else
                 let n = node.without(thread1, shift + 5, hashKey, key, removedLeaf)
                 if n = node then this :> INode else
-                if n = Unchecked.defaultof<INode> then 
+                if n = Unchecked.defaultof<INode> then
                     if this.count <= 8 then // shrink
                         this.pack(thread1, idx) :> INode
                     else
@@ -320,11 +320,11 @@ and private ArrayNode(thread,count',array':INode[]) =
                     while !j < this.array.Length do
                         if this.array.[!j] <> Unchecked.defaultof<INode> then
                             yield! this.array.[!j].nodeSeq()
-            
+
                         j := !j + 1 }
 
 
-and private BitmapIndexedNode(thread,bitmap',array':obj[]) =    
+and private BitmapIndexedNode(thread,bitmap',array':obj[]) =
     member val array = array' with get, set
     member val bitmap = bitmap' with get, set
 
@@ -356,7 +356,7 @@ and private BitmapIndexedNode(thread,bitmap',array':obj[]) =
             editable.array.[editable.array.Length - 2] <- null
             editable.array.[editable.array.Length - 1] <- null
             editable
-         
+
         interface INode with
 
             member this.find(shift, hash, key) =
@@ -365,12 +365,12 @@ and private BitmapIndexedNode(thread,bitmap',array':obj[]) =
                 let idx' = index(this.bitmap,bit) * 2
                 let keyOrNull = this.array.[idx']
                 let valOrNode = this.array.[idx'+1]
-                if keyOrNull = null then 
-                    (valOrNode :?> INode).find(shift + 5, hash, key) 
+                if keyOrNull = null then
+                    (valOrNode :?> INode).find(shift + 5, hash, key)
                 else
                     if key = keyOrNull then
                         valOrNode
-                    else 
+                    else
                         null
 
             member this.tryFind(shift, hash, key) =
@@ -382,10 +382,10 @@ and private BitmapIndexedNode(thread,bitmap',array':obj[]) =
                 if keyOrNull = null then (valOrNode :?> INode).tryFind(shift + 5, hash, key) else
                 if key = keyOrNull then
                     Some valOrNode
-                else 
+                else
                     None
 
-            member this.assoc(shift, hashKey, key, value, addedLeaf) = 
+            member this.assoc(shift, hashKey, key, value, addedLeaf) =
                 let bit = bitpos(hashKey, shift)
                 let idx' = index(this.bitmap,bit) * 2
                 if (this.bitmap &&& bit) <> 0 then
@@ -428,7 +428,7 @@ and private BitmapIndexedNode(thread,bitmap',array':obj[]) =
             member this.nodeSeq() = createNodeSeq this.array
 
 
-            member this.assoc(thread1, shift, hashKey, key, value, addedLeaf) = 
+            member this.assoc(thread1, shift, hashKey, key, value, addedLeaf) =
                 let bit = bitpos(hashKey, shift)
                 let idx' = index(this.bitmap,bit) * 2
                 if (this.bitmap &&& bit) <> 0 then
@@ -442,7 +442,7 @@ and private BitmapIndexedNode(thread,bitmap',array':obj[]) =
                             if value = valOrNode then this :> INode else this.editAndSet(thread1, idx'+1, value) :> INode
                         else
                             addedLeaf.Value <- addedLeaf :> obj
-                            this.editAndSet(thread1, idx', null, idx'+1, 
+                            this.editAndSet(thread1, idx', null, idx'+1,
                                             NodeCreation.createNode(thread1, shift + 5, keyOrNull, valOrNode, hashKey, key, value)) :> INode
                 else
                     let n = NumberOfSetBits(this.bitmap) * 2
@@ -468,7 +468,7 @@ and private BitmapIndexedNode(thread,bitmap',array':obj[]) =
                                     else
                                         nodes.[i] <- (BitmapIndexedNode() :> INode).assoc(thread1, shift + 5, hash(this.array.[j]), this.array.[j], this.array.[j+1], addedLeaf)
                                     j <- j + 2;
-                                 
+
                             ArrayNode(thread1, n + 1, nodes) :> INode
                         else
                             let newArray = Array.create (n'+8) null
@@ -481,7 +481,7 @@ and private BitmapIndexedNode(thread,bitmap',array':obj[]) =
                             editable.array <- newArray
                             editable.bitmap <- this.bitmap ||| bit
                             editable :> INode
-                        
+
 
             member this.without(shift, hashKey, key) =
                 let bit = bitpos(hashKey, shift)
@@ -530,13 +530,13 @@ type internal TransientHashMap<[<EqualityConditionalOn>]'T, 'S when 'T : equalit
     member val nullValue = nullValue' with get, set
     member val count = count' with get, set
     member val root = root' with get, set
-    
+
     static member Empty() : TransientHashMap<'T, 'S> = TransientHashMap(ref Thread.CurrentThread,0, Unchecked.defaultof<INode>, false, null)
     member this.Length : int = this.count
 
     member internal this.EnsureEditable() =
         if !thread = Thread.CurrentThread then () else
-        if !thread <> null then 
+        if !thread <> null then
             failwith "Transient used by non-owner thread"
         failwith "Transient used after persistent! call"
 
@@ -554,13 +554,13 @@ type internal TransientHashMap<[<EqualityConditionalOn>]'T, 'S when 'T : equalit
             this
         else
             leafFlag.Value <- null
-            let n = 
+            let n =
                 (if this.root = Unchecked.defaultof<INode> then BitmapIndexedNode() :> INode else this.root)
                     .assoc(thread, 0, hash(key), key, value, leafFlag)
             if n <> this.root then
                 this.root <- n
 
-            if leafFlag.Value <> null then 
+            if leafFlag.Value <> null then
                 this.count <- this.count + 1
             this
 
@@ -581,14 +581,14 @@ type internal TransientHashMap<[<EqualityConditionalOn>]'T, 'S when 'T : equalit
             if leafFlag.Value <> null then this.count <- this.count - 1
             this
 
-    member this.Item 
-        with get key = 
-            if key = Unchecked.defaultof<'T> then 
+    member this.Item
+        with get key =
+            if key = Unchecked.defaultof<'T> then
                 if this.hasNull then unbox this.nullValue else failwith "Key null is not found in the map."
             else
                 if this.root = Unchecked.defaultof<INode> then
-                    failwithf "Key %A is not found in the map." key 
-                else 
+                    failwithf "Key %A is not found in the map." key
+                else
                     match this.root.tryFind(0, hash(key), key) with
                     | Some value -> value :?> 'S
                     | _ -> failwithf "Key %A is not found in the map." key
@@ -615,11 +615,11 @@ and PersistentHashMap<[<EqualityConditionalOn>]'T, 'S when 'T : equality>  =
         nullValue = nullValue' }
 
     member this.ContainsKey (key:'T) =
-        if key = Unchecked.defaultof<'T> then 
-            this.hasNull 
+        if key = Unchecked.defaultof<'T> then
+            this.hasNull
         else
-            if this.root = Unchecked.defaultof<INode> then 
-                false 
+            if this.root = Unchecked.defaultof<INode> then
+                false
             else
                 this.root.find(0, hash(key), key) <> null
 
@@ -632,15 +632,21 @@ and PersistentHashMap<[<EqualityConditionalOn>]'T, 'S when 'T : equality>  =
     member this.Add(key:'T, value:'S) =
         if key = Unchecked.defaultof<'T> then
             let valueobj = box value
-            if this.hasNull && System.Object.ReferenceEquals(valueobj, this.nullValue) then this 
+            // By using boxed values for this equality comparison, we remove the
+            // equality constraint on the type of values in the map.
+            // The comparison will use the equivalent of valueobj.Equals(this.nullValue),
+            // so the dynamic type will be used to check equality. Non-equality types
+            // (like FSharp functions) should work as long as they respect the convention
+            // that Equals should never throw exceptions.
+            if this.hasNull && (valueobj = this.nullValue) then this
             else
                 let count = if this.hasNull then this.count else this.count + 1
                 PersistentHashMap<'T, 'S>(count, this.root, true, valueobj)
-        else 
+        else
             let addedLeaf = Box(null)
             let newroot =
                 (if this.root = Unchecked.defaultof<INode> then BitmapIndexedNode() :> INode else this.root)
-                    .assoc(0, hash(key), key, value, addedLeaf) 
+                    .assoc(0, hash(key), key, value, addedLeaf)
 
             if newroot = this.root then this else
             let count = if addedLeaf.Value = null then this.count else this.count + 1
@@ -649,27 +655,27 @@ and PersistentHashMap<[<EqualityConditionalOn>]'T, 'S when 'T : equality>  =
     member this.Remove(key:'T) =
         if key = Unchecked.defaultof<'T> then
             if this.hasNull then PersistentHashMap(this.count - 1, this.root, false, Unchecked.defaultof<'S>) else this
-        else 
+        else
             if this.root = Unchecked.defaultof<INode> then this else
             let newroot = this.root.without(0, hash(key), key)
             if newroot = this.root then this else
             PersistentHashMap(this.count - 1, newroot, this.hasNull, this.nullValue)
 
-    member this.Item 
-        with get key = 
-            if key = Unchecked.defaultof<'T> then 
+    member this.Item
+        with get key =
+            if key = Unchecked.defaultof<'T> then
                 if this.hasNull then unbox this.nullValue else failwith "Key null is not found in the map."
             else
                 if this.root = Unchecked.defaultof<INode> then
-                    failwithf "Key %A is not found in the map." key 
-                else 
+                    failwithf "Key %A is not found in the map." key
+                else
                     match this.root.tryFind(0, hash(key), key) with
                     | Some value -> value :?> 'S
                     | _ -> failwithf "Key %A is not found in the map." key
 
     member this.GetEnumerator() : IEnumerator<'T * 'S> =
         let iterator =
-            seq {            
+            seq {
                 if this.hasNull then yield Unchecked.defaultof<'T>, unbox this.nullValue
                 if this.root <> Unchecked.defaultof<INode> then
                     yield!
@@ -688,7 +694,7 @@ and PersistentHashMap<[<EqualityConditionalOn>]'T, 'S when 'T : equality>  =
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 /// Defines functions which allow to access and manipulate PersistentHashMaps.
-module PersistentHashMap = 
+module PersistentHashMap =
     ///O(1), returns an empty PersistentHashMap
     let empty<'T,'S when 'T : equality and 'S : equality> = PersistentHashMap.Empty() :> PersistentHashMap<'T, 'S>
 
@@ -711,11 +717,11 @@ module PersistentHashMap =
     let inline toSeq (map:PersistentHashMap<'T, 'S>) = map :> seq<'T*'S>
 
     ///O(n). Returns a HashMap of the seq.
-    let inline ofSeq (items : ('T*'S) seq) = PersistentHashMap<'T, 'S>.ofSeq items 
+    let inline ofSeq (items : ('T*'S) seq) = PersistentHashMap<'T, 'S>.ofSeq items
 
     ///O(n). Returns a HashMap whose elements are the results of applying the supplied function to each of the elements of a supplied HashMap.
-    let map (f : 'S -> 'S1) (map: PersistentHashMap<'T, 'S>) : PersistentHashMap<'T, 'S1> = 
+    let map (f : 'S -> 'S1) (map: PersistentHashMap<'T, 'S>) : PersistentHashMap<'T, 'S1> =
         let mutable ret = TransientHashMap<'T, 'S1>.Empty()
         for (key,value) in map do
             ret <- ret.Add(key,f value)
-        ret.persistent() 
+        ret.persistent()
