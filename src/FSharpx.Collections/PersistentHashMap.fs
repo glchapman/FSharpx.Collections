@@ -667,23 +667,24 @@ and PersistentHashMap<[<EqualityConditionalOn>]'T, 'S when 'T : equality>  =
                     | Some value -> value :?> 'S
                     | _ -> failwithf "Key %A is not found in the map." key
 
-    member this.Iterator<'T,'S>() : ('T * 'S) seq =
-        seq {            
-            if this.hasNull then yield Unchecked.defaultof<'T>, unbox this.nullValue
-            if this.root <> Unchecked.defaultof<INode> then
-                yield!
-                    this.root.nodeSeq()
-                    |> Seq.map (fun (key,value) -> key :?> 'T,value :?> 'S)
-        }
+    member this.GetEnumerator() : IEnumerator<'T * 'S> =
+        let iterator =
+            seq {            
+                if this.hasNull then yield Unchecked.defaultof<'T>, unbox this.nullValue
+                if this.root <> Unchecked.defaultof<INode> then
+                    yield!
+                        this.root.nodeSeq()
+                        |> Seq.map (fun (key,value) -> key :?> 'T,value :?> 'S)
+            }
+        iterator.GetEnumerator()
 
     interface System.Collections.Generic.IEnumerable<'T*'S> with
         member this.GetEnumerator () =
-          this.Iterator().GetEnumerator()
+          this.GetEnumerator()
 
     interface System.Collections.IEnumerable with
         member this.GetEnumerator () =
-          (this.Iterator().GetEnumerator())
-            :> System.Collections.IEnumerator
+          upcast this.GetEnumerator()
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 /// Defines functions which allow to access and manipulate PersistentHashMaps.
